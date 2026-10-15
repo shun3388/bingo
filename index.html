@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ビンゴカード</title>
+<style>
+:root{--bg:#fff8ef;--fg:#2b2a33;--card:#fff;--line:#e8d9c3;--ac:#e8743b;--hit:#ffd166;--bingo:#7bd389;--mute:#7a7468;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d1b22;--fg:#f1ece4;--card:#2a2731;--line:#403b49;--ac:#ff9a5c;--hit:#8a6a14;--bingo:#2f7a45;--mute:#a59fb0;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1d1b22;--fg:#f1ece4;--card:#2a2731;--line:#403b49;--ac:#ff9a5c;--hit:#8a6a14;--bingo:#2f7a45;--mute:#a59fb0;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Hiragino Sans","Yu Gothic",Meiryo,sans-serif}
+main{max-width:620px;margin:0 auto;padding:16px}h1{font-size:1.4rem;margin:0 0 12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+select,button,input{font:inherit;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
+input{width:6em}button{cursor:pointer}button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
+.st{font-weight:700;margin:8px 0}.st small{color:var(--mute);font-weight:400}
+#g{display:grid;gap:4px}
+.c{background:var(--card);border:2px solid var(--line);border-radius:10px;display:flex;align-items:center;justify-content:center;aspect-ratio:1;font-size:var(--fs);font-weight:800;cursor:pointer;user-select:none}
+.c.on{background:var(--hit);border-color:var(--ac);color:var(--ac)}.c.b{background:var(--bingo);color:var(--fg);border-color:var(--bingo)}
+#msg{display:none;margin:10px 0;padding:12px;border-radius:12px;background:var(--bingo);font-weight:700;text-align:center}
+.note{color:var(--mute);font-size:.85rem;margin-top:14px}
+</style>
+</head>
+<body>
+<main>
+<h1>ビンゴカード</h1>
+<div class="bar">
+<label>盤面 <select id="n"></select></label>
+<button class="p" id="new">新しいカード</button>
+<button id="rs">リセット</button>
+</div>
+<div class="bar"><input id="q" type="number" inputmode="numeric" placeholder="番号"><button id="op">この番号を開ける</button></div>
+<div class="st" id="st"></div>
+<div id="msg"></div>
+<div id="g"></div>
+<p class="note">出た番号のマスをタップ（もう一度で解除）するか、上の欄に番号を入れて開けます。お題ドロー側と同じ盤面サイズを選んでください。</p>
+</main>
+<script>
+const $=id=>document.getElementById(id),KEY="bingoCardV1";
+let S={n:5,card:[],on:[]},prev=0;
+const ns=$("n");for(let i=5;i<=10;i++)ns.add(new Option(i+"×"+i+"（1〜"+i*i+"）",i));
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.card&&d.card.length===d.n*d.n)S=d}catch(e){}
+function fresh(){const a=Array.from({length:S.n*S.n},(_,i)=>i+1);for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}S.card=a;S.on=a.map(()=>false);prev=0;save();draw()}
+function lines(){const n=S.n,L=[],r=[...Array(n).keys()];r.forEach(a=>{L.push(r.map(c=>a*n+c));L.push(r.map(c=>c*n+a))});L.push(r.map(i=>i*n+i));L.push(r.map(i=>i*n+n-1-i));return L}
+function draw(){
+const n=S.n,g=$("g");ns.value=n;g.style.gridTemplateColumns=`repeat(${n},1fr)`;
+g.style.setProperty("--fs",({5:"1.9rem",6:"1.6rem",7:"1.35rem",8:"1.15rem",9:"1rem",10:".9rem"})[n]);
+const L=lines(),done=L.filter(l=>l.every(i=>S.on[i])),reach=L.filter(l=>l.filter(i=>S.on[i]).length===n-1).length,hit=new Set(done.flat());
+g.innerHTML="";
+S.card.forEach((v,i)=>{const d=document.createElement("div");d.className="c"+(S.on[i]?" on":"")+(hit.has(i)?" b":"");d.textContent=v;d.onclick=()=>{S.on[i]=!S.on[i];save();draw()};g.appendChild(d)});
+$("st").innerHTML=`開いた ${S.on.filter(Boolean).length}/${n*n}　ビンゴ ${done.length}ライン　リーチ ${reach}ライン <small>（全${n*2+2}ライン）</small>`;
+const m=$("msg");if(done.length){m.style.display="block";m.textContent=done.length>prev?"ビンゴ！！ "+done.length+"ライン":"ビンゴ "+done.length+"ライン達成中"}else m.style.display="none";
+prev=done.length}
+ns.onchange=()=>{if(S.on.some(Boolean)&&!confirm("盤面を変えると今のカードは消えます。よろしいですか？")){ns.value=S.n;return}S.n=+ns.value;fresh()};
+$("new").onclick=()=>{if(S.on.some(Boolean)&&!confirm("今のカードを破棄して新しく作りますか？"))return;fresh()};
+$("rs").onclick=()=>{if(confirm("開けたマスをすべて戻しますか？")){S.on=S.card.map(()=>false);prev=0;save();draw()}};
+$("op").onclick=()=>{const v=+$("q").value,i=S.card.indexOf(v);if(i<0){alert("その番号はこのカードにありません");return}S.on[i]=true;$("q").value="";save();draw()};
+if(S.card.length!==S.n*S.n)fresh();else draw();
+</script>
+</body>
+</html>
