@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>お題ドロー</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#fff8ef;--fg:#2b2a33;--card:#fff;--line:#e8d9c3;--ac:#e8743b;--hit:#ffd166;--mute:#7a7468;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d1b22;--fg:#f1ece4;--card:#2a2731;--line:#403b49;--ac:#ff9a5c;--hit:#8a6a14;--mute:#a59fb0;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1d1b22;--fg:#f1ece4;--card:#2a2731;--line:#403b49;--ac:#ff9a5c;--hit:#8a6a14;--mute:#a59fb0;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Hiragino Sans","Yu Gothic",Meiryo,sans-serif}
+main{max-width:760px;margin:0 auto;padding:16px}h1{font-size:1.4rem;margin:0 0 12px}h2{font-size:1.05rem;margin:18px 0 6px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+select,button{font:inherit;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+button.p{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:700;font-size:1.1rem;padding:10px 22px}button:disabled{opacity:.5}
+#stage{background:var(--card);border:3px solid var(--line);border-radius:20px;padding:22px 14px;text-align:center;min-height:210px;display:flex;flex-direction:column;justify-content:center;gap:10px}
+#no{font-size:clamp(3rem,16vw,5.5rem);font-weight:800;color:var(--ac);line-height:1}
+#tp{font-size:clamp(1.1rem,4.6vw,1.6rem);font-weight:700;line-height:1.45}
+#stage.roll{border-color:var(--ac);animation:sh .12s infinite}#stage.roll #tp{opacity:.55}
+#stage.pop{border-color:var(--ac);animation:pop .7s}
+@keyframes sh{0%{transform:translate(0,0)}25%{transform:translate(-3px,2px)}50%{transform:translate(3px,-2px)}75%{transform:translate(-2px,-2px)}100%{transform:translate(0,0)}}
+@keyframes pop{0%{transform:scale(.8);box-shadow:0 0 0 0 var(--ac)}40%{transform:scale(1.07)}100%{transform:scale(1);box-shadow:0 0 0 24px transparent}}
+.st{font-weight:700;margin:12px 0 8px}#chips{display:flex;flex-wrap:wrap;gap:4px}
+.ch{min-width:2.1em;text-align:center;padding:3px 4px;border-radius:6px;border:1px solid var(--line);font-size:.8rem;color:var(--mute)}.ch.d{background:var(--hit);color:var(--fg);border-color:var(--ac);font-weight:700}
+#hist{padding-left:0;list-style:none;margin:0}#hist li{padding:7px 4px;border-bottom:1px solid var(--line)}#hist b{display:inline-block;min-width:3.6em;color:var(--ac)}
+.note{color:var(--mute);font-size:.85rem}
+#ru{font-size:1rem;font-weight:700;padding:8px;border-radius:10px;background:var(--hit);display:none}#ru:not(:empty){display:block}#ru.w{background:#e5484d;color:#fff}
+table{border-collapse:collapse;width:100%;font-size:.82rem;margin-top:8px}td,th{border-bottom:1px solid var(--line);padding:5px 4px;text-align:left;vertical-align:top}td small{color:var(--mute)}
+</style>
+</head>
+<body>
+<main>
+<h1>お題ドロー</h1>
+<div class="bar">
+<label>盤面 <select id="n"></select></label>
+<button class="p" id="go">引く！</button>
+<button id="snd">音：ON</button>
+<button id="rs">リセット</button>
+</div>
+<div id="stage"><div id="no">No.--</div><div id="tp">「引く！」を押してね</div><div id="ru"></div></div>
+<div class="st" id="st"></div>
+<div id="chips"></div>
+<h2>アンケート回答状況</h2>
+<div class="bar"><input type="file" id="f" accept=".xlsx,.xls"><b id="fs"></b></div>
+<table id="tb"></table>
+<h2>これまでのお題</h2>
+<ol id="hist"></ol>
+<p class="note">アンケート条件つきのお題は1〜12番です（5×5でも必ず含まれます）。回答のxlsx（Googleフォームの回答をxlsxで書き出したもの）を読み込むと、お題が出たときに開けられる人が表示されます。ビンゴカード側の盤面サイズと同じものを選んでください。1〜(縦×横) の番号から、まだ出ていないものがランダムに選ばれます。</p>
+</main>
+<script>
+const T=["ありがとうを言った", "周りの人への気遣いをできた", "遅刻しなかった", "忘れ物をしなかった", "支払いを済ませている", "場の空気を良くするアプローチをできた", "スマホを見すぎず観光や会話を楽しめた", "メンバーや出会った人へのリスペクトがあった", "身だしなみやマナーを維持できた", "今回の旅行を楽しみにしていた", "今回の旅行を楽しむことができた", "体調を崩さなかった", "ごみのポイ捨てはしなかった", "食べ物や親など支えてくれるものへ感謝できた", "人とぶつからず適切な距離感で行動できた", "だるいなどネガティブな言動をしなかった", "お世話になった人に自費でお土産を買った", "計画を進めるサポートを率先して行った", "おいしいものを食べることができた", "怪我をしなかった", "また旅行に参加したい", "仕事や学業への励みになった", "今回の経験で学びや発見があった", "3万歩以上歩いた", "スマホを落とさず壊さなかった", "自分から朝の挨拶をした", "集合時間の5分前に着いた", "みんなのために写真を撮ってあげた", "みんなで集合写真を撮った", "ご当地グルメを食べた", "初めて食べるものに挑戦した", "お店の人に「ごちそうさま」を伝えた", "公共の場で大声を出さなかった", "荷物を整理整頓して管理できた", "スマホの充電切れを起こさなかった", "現金やカードを紛失しなかった", "道に迷っても冷静に対応できた", "誰かの荷物を持ってあげた", "席や順番を譲った", "全員が話せる話題を振った", "誰かの良いところを言葉で伝えた", "自分の意見を適切に伝えられた", "人の意見を最後まで聞いた", "予定変更に前向きに対応した", "トラブルを笑いに変えた", "運転手や手配役に感謝を伝えた", "食べ残しをしなかった", "宿や車内をきれいに使った", "チェックアウト前に忘れ物確認をした", "部屋や車内のゴミを片付けた", "睡眠をしっかりとった", "朝日や夕日など景色に感動した", "自然の美しさに足を止めた", "土地の歴史や由来を知った", "地元の人と言葉を交わした", "お店の人に笑顔で接した", "ご当地のお土産を自分用に買った", "家族や友人へのお土産を選んだ", "旅の様子を誰かに連絡した", "たくさん笑った", "声を出して笑い転げた", "心から「来てよかった」と思った", "新しい発見を誰かと語り合った", "アートや展示をじっくり味わった", "乗り物で周りに配慮して過ごした", "乗り換えや時間管理がスムーズだった", "行き先の下調べをした", "しおりやスケジュールを確認した", "天気に合った服装や準備ができた", "歩きやすい靴で臨んだ", "水分補給や休憩をこまめにとった", "疲れていても機嫌よく過ごした", "疲れている人に気づいて声をかけた", "遅い人に歩幅を合わせた", "割り勘や精算をスムーズに行った", "予算内におさまった", "無駄遣いをしすぎなかった", "みんなの分まで注文に気配りした", "食べ物をシェアした", "乾杯の音頭や挨拶をした", "夜に一日を振り返って語った", "初対面の人とも打ち解けた", "普段話さない人と深く話せた", "笑顔でうなずいて話を聞いた", "行きたい場所を自分から提案した", "みんなの希望を調整してまとめた", "案内表示をよく見て行動した", "ルールや注意書きを守った", "撮影のマナーを守った", "アクティビティを全力で楽しんだ", "日頃のストレスを忘れられた", "自分の成長を感じる瞬間があった", "大切な人を思い出した", "日常の当たり前に感謝できた", "続けたい習慣やヒントを見つけた", "旅の思い出を一生モノだと思えた", "誰かのために一肌脱いだ", "ハプニングを楽しめた", "最後まで元気に笑顔で過ごした", "帰ったらみんなに感想を伝えたい"];
+const SV=[
+["期待値","かなり楽しみにしていた","own","旅行の期待値で「かなり楽しみにしていた」を選んだ人は開けられる"],
+["一番楽しみ","会話やメンバーとの交流","own","一番楽しみなものに「会話やメンバーとの交流」を選んだ人は開けられる"],
+["お土産","ちいかわグッズ","any","お土産に「ちいかわグッズ」を選んだ人が1人でもいれば全員開けられる"],
+["目覚まし","鳴らさない","any","朝のアラームを「鳴らさない」と答えた人が1人でもいれば全員開けられる"],
+["移動中","外の景色や会話を楽しむ","own","移動中の過ごし方で「外の景色や会話を楽しむ」を選んだ人は開けられる"],
+["ホテルに着いたら","ベッドにダイブ","min3","ホテルで最初に「ベッドにダイブ」を選んだ人が3人以上いれば、選んだ人は開けられる"],
+["集合時間","遅れて登場する","reset","集合時間で「遅れて登場する」を選んだ人が1人でもいたらリセット"],
+["買い食い","大好き","own","買い食い・食べ歩きが「大好き」と答えた人は開けられる"],
+["自分ルールな持ち物","ちいかわのぬいぐるみ","any","必ず持っていく物に「ちいかわのぬいぐるみ」を選んだ人が1人でもいれば全員開けられる"],
+["性格","計画的でしっかりもの","own","性格を「計画的でしっかりもの」と答えた人は開けられる"],
+["性格","主体性があり誠実","own","性格を「主体性があり誠実」と答えた人は開けられる"],
+["性格","空気を読むタイプで協調性がある","own","性格を「空気を読むタイプで協調性がある」と答えた人は開けられる"]];
+const NS=SV.length,RK="bingoResV1";T.unshift(...SV.map(r=>"【アンケート】"+r[3]));
+let RES=[];try{RES=JSON.parse(localStorage.getItem(RK))||[]}catch(e){}
+const who=r=>RES.filter(a=>a.a[r[0]]===r[1]).map(a=>a.m);
+function judge(k){const r=SV[k-1],w=who(r),c=w.length,n=w.join("、"),no={s:"該当者なし。今回は誰も開けられません",w:0};
+if(r[2]==="own")return c?{s:"開けられる人（"+c+"人）："+n,w:0}:no;
+if(r[2]==="any")return c?{s:"全員開けられる！（選んだ人 "+c+"人："+n+"）",w:0}:no;
+if(r[2]==="min3")return c>=3?{s:"3人以上が選択。開けられる人（"+c+"人）："+n,w:0}:{s:"選んだ人は"+c+"人で3人未満。誰も開けられません",w:0};
+return c?{s:"リセット発動！全員のカードをリセット（"+n+"）",w:1}:{s:"リセットなし。セーフです",w:0}}
+function loadX(file){if(typeof XLSX==="undefined"){alert("読み込み用ライブラリを取得できませんでした");return}
+const rd=new FileReader();rd.onload=e=>{const wb=XLSX.read(e.target.result,{type:"array"}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""}),h=(rows[0]||[]).map(x=>String(x).trim()),keys=[...new Set(SV.map(r=>r[0]))],ix={};
+keys.forEach(k=>ix[k]=h.findIndex(x=>x.includes(k)));const mi=h.findIndex(x=>x.includes("メール"));
+RES=rows.slice(1).filter(r=>r.some(c=>String(c).trim())).map((r,i)=>{const a={};keys.forEach(k=>a[k]=ix[k]>=0?String(r[ix[k]]).trim():"");const m=mi>=0&&String(r[mi]).trim()?String(r[mi]).split("@")[0]:"回答者"+(i+1);return{m:m,a:a}});
+try{localStorage.setItem(RK,JSON.stringify(RES))}catch(x){}render()};rd.readAsArrayBuffer(file)}
+const $=id=>document.getElementById(id),KEY="bingoDrawV1";
+let S={n:5,drawn:[]},busy=false,snd=true,AC,NB;
+const ns=$("n");for(let i=5;i<=10;i++)ns.add(new Option(i+"×"+i+"（1〜"+i*i+"）",i));
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.drawn)&&d.n>=5&&d.n<=10)S=d}catch(e){}
+const pool=()=>S.n*S.n;
+const left=()=>{const a=[];for(let i=1;i<=pool();i++)if(!S.drawn.includes(i))a.push(i);return a};
+function show(k,fin){$("no").textContent="No."+k;$("tp").textContent=T[k-1];const u=$("ru");if(fin&&k<=NS){const j=judge(k);u.textContent=j.s;u.className=j.w?"w":""}else u.textContent=""}
+function render(){
+ns.value=S.n;$("st").textContent="引いた数 "+S.drawn.length+" / "+pool()+"（残り "+(pool()-S.drawn.length)+"）";
+$("chips").innerHTML=Array.from({length:pool()},(_,i)=>`<span class="ch${S.drawn.includes(i+1)?" d":""}">${i+1}</span>`).join("");
+$("hist").innerHTML=S.drawn.slice().reverse().map(k=>`<li><b>No.${k}</b>${T[k-1]}${k<=NS?"<br><small>"+judge(k).s+"</small>":""}</li>`).join("");
+$("fs").textContent="回答 "+RES.length+" 件"+(RES.length?"":"（未読み込み）");
+$("tb").innerHTML="<tr><th>No.</th><th>条件</th><th>該当</th></tr>"+SV.map((r,i)=>"<tr><td>"+(i+1)+"</td><td>"+r[3]+"</td><td>"+who(r).length+"人<br><small>"+who(r).join("、")+"</small></td></tr>").join("")}
+/* 効果音 */
+function ctxInit(){if(!snd)return;if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();NB=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);const d=NB.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}if(AC.state==="suspended")AC.resume()}
+function hit(t,g){const s=AC.createBufferSource();s.buffer=NB;const f=AC.createBiquadFilter();f.type="bandpass";f.frequency.value=1500+Math.random()*700;f.Q.value=.7;const a=AC.createGain();a.gain.setValueAtTime(g,t);a.gain.exponentialRampToValueAtTime(.001,t+.07);s.connect(f);f.connect(a);a.connect(AC.destination);s.start(t,Math.random()*.4,.08);
+const o=AC.createOscillator(),b=AC.createGain();o.frequency.setValueAtTime(190,t);o.frequency.exponentialRampToValueAtTime(110,t+.05);b.gain.setValueAtTime(g*.5,t);b.gain.exponentialRampToValueAtTime(.001,t+.07);o.connect(b);b.connect(AC.destination);o.start(t);o.stop(t+.08)}
+function roll(D){if(!snd||!AC)return;const n=AC.currentTime+.05;for(let t=0;t<D;){const p=t/D;hit(n+t,.12+.6*p);t+=.06-.025*p}}
+function crash(){if(!snd||!AC)return;const t=AC.currentTime;const s=AC.createBufferSource();s.buffer=NB;s.loop=true;const f=AC.createBiquadFilter();f.type="highpass";f.frequency.value=4500;const a=AC.createGain();a.gain.setValueAtTime(.55,t);a.gain.exponentialRampToValueAtTime(.001,t+1.6);s.connect(f);f.connect(a);a.connect(AC.destination);s.start(t);s.stop(t+1.7);
+[523,659,784,1047].forEach(h=>{const o=AC.createOscillator(),g=AC.createGain();o.type="triangle";o.frequency.value=h;g.gain.setValueAtTime(.16,t);g.gain.exponentialRampToValueAtTime(.001,t+.9);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.95)})}
+/* 抽選 */
+function draw(){
+if(busy)return;const L=left();if(!L.length){alert("すべて引き終わりました！");return}
+busy=true;$("go").disabled=ns.disabled=true;$("ru").textContent="";$("stage").className="roll";
+const r=L[Math.floor(Math.random()*L.length)],D=3300,t0=performance.now();
+ctxInit();roll(D/1000);
+(function tick(){const p=(performance.now()-t0)/D;
+if(p>=1){S.drawn.push(r);save();show(r,1);$("stage").className="pop";crash();busy=false;$("go").disabled=ns.disabled=false;render();return}
+show(L[Math.floor(Math.random()*L.length)]);setTimeout(tick,55+p*p*280)})()}
+function reset(n){S={n:n,drawn:[]};save();$("no").textContent="No.--";$("tp").textContent="「引く！」を押してね";$("ru").textContent="";$("stage").className="";render()}
+$("go").onclick=draw;
+ns.onchange=()=>{if(S.drawn.length&&!confirm("盤面を変えると引いた履歴が消えます。よろしいですか？")){ns.value=S.n;return}reset(+ns.value)};
+$("rs").onclick=()=>{if(confirm("履歴をリセットしますか？"))reset(S.n)};
+$("snd").onclick=()=>{snd=!snd;$("snd").textContent=snd?"音：ON":"音：OFF"};
+$("f").onchange=e=>{if(e.target.files[0])loadX(e.target.files[0])};
+render();
+</script>
+</body>
+</html>
