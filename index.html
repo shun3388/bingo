@@ -19,6 +19,7 @@ input{width:6em}button{cursor:pointer}button.p{background:var(--ac);color:#fff;b
 .c{background:var(--card);border:2px solid var(--line);border-radius:10px;display:flex;align-items:center;justify-content:center;aspect-ratio:1;font-size:var(--fs);font-weight:800;cursor:pointer;user-select:none}
 .c.on{background:var(--hit);border-color:var(--ac);color:var(--ac)}.c.b{background:var(--bingo);color:var(--fg);border-color:var(--bingo)}
 #msg{display:none;margin:10px 0;padding:12px;border-radius:12px;background:var(--bingo);font-weight:700;text-align:center}
+#md{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}#md[hidden]{display:none}.mb{background:var(--card);color:var(--fg);border-radius:16px;padding:20px;max-width:360px;width:100%}.mb p{margin:0;line-height:1.6;font-weight:700}.mr{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .note{color:var(--mute);font-size:.85rem;margin-top:14px}
 </style>
 </head>
@@ -36,7 +37,10 @@ input{width:6em}button{cursor:pointer}button.p{background:var(--ac);color:#fff;b
 <div id="g"></div>
 <p class="note">出た番号のマスをタップ（もう一度で解除）するか、上の欄に番号を入れて開けます。お題ドロー側と同じ盤面サイズを選んでください。</p>
 </main>
+<div id="md" hidden><div class="mb"><p id="mt"></p><div class="mr"><button id="mn">キャンセル</button><button class="p" id="my">OK</button></div></div></div>
 <script>
+function dlg(m,ok,no,c){const d=document.getElementById("md"),n=document.getElementById("mn");document.getElementById("mt").textContent=m;n.style.display=c?"":"none";d.hidden=false;document.getElementById("my").onclick=()=>{d.hidden=true;if(ok)ok()};n.onclick=()=>{d.hidden=true;if(no)no()}}
+const conf=(m,ok,no)=>dlg(m,ok,no,1);
 const $=id=>document.getElementById(id),KEY="bingoCardV1";
 let S={n:5,card:[],on:[]},prev=0;
 const ns=$("n");for(let i=5;i<=10;i++)ns.add(new Option(i+"×"+i+"（1〜"+i*i+"）",i));
@@ -53,10 +57,10 @@ S.card.forEach((v,i)=>{const d=document.createElement("div");d.className="c"+(S.
 $("st").innerHTML=`開いた ${S.on.filter(Boolean).length}/${n*n}　ビンゴ ${done.length}ライン　リーチ ${reach}ライン <small>（全${n*2+2}ライン）</small>`;
 const m=$("msg");if(done.length){m.style.display="block";m.textContent=done.length>prev?"ビンゴ！！ "+done.length+"ライン":"ビンゴ "+done.length+"ライン達成中"}else m.style.display="none";
 prev=done.length}
-ns.onchange=()=>{if(S.on.some(Boolean)&&!confirm("盤面を変えると今のカードは消えます。よろしいですか？")){ns.value=S.n;return}S.n=+ns.value;fresh()};
-$("new").onclick=()=>{if(S.on.some(Boolean)&&!confirm("今のカードを破棄して新しく作りますか？"))return;fresh()};
-$("rs").onclick=()=>{if(confirm("開けたマスをすべて戻しますか？")){S.on=S.card.map(()=>false);prev=0;save();draw()}};
-$("op").onclick=()=>{const v=+$("q").value,i=S.card.indexOf(v);if(i<0){alert("その番号はこのカードにありません");return}S.on[i]=true;$("q").value="";save();draw()};
+ns.onchange=()=>{const v=+ns.value;if(S.on.some(Boolean)){ns.value=S.n;conf("盤面を変えると今のカードは消えます。よろしいですか？",()=>{S.n=v;fresh()})}else{S.n=v;fresh()}};
+$("new").onclick=()=>{if(S.on.some(Boolean))conf("今のカードを破棄して新しく作りますか？",fresh);else fresh()};
+$("rs").onclick=()=>conf("開けたマスをすべて戻しますか？",()=>{S.on=S.card.map(()=>false);prev=0;save();draw()});
+$("op").onclick=()=>{const v=+$("q").value,i=S.card.indexOf(v);if(i<0){dlg("その番号はこのカードにありません");return}S.on[i]=true;$("q").value="";save();draw()};
 if(S.card.length!==S.n*S.n)fresh();else draw();
 </script>
 </body>
